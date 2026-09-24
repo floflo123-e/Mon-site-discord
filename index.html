@@ -205,9 +205,10 @@
   /* ---------- Présence Discord ---------- */
   .presence {
     margin-top: 18px; padding: 14px;
-    display: flex; align-items: center; gap: 12px; text-align: left;
-    border-radius: 16px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 12px; text-align: left;
+    border-radius: 16px; background: rgba(0, 0, 0, .38); border: 1px solid var(--line);
   }
+  .p-head { display: flex; align-items: center; gap: 12px; }
   .p-avatar { position: relative; width: 46px; height: 46px; flex: none; }
   .p-avatar > .img {
     width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center;
@@ -222,9 +223,27 @@
   .dot.idle { background: #f0b232; } .dot.dnd { background: #f23f43; } .dot.offline { background: #80848e; }
   .p-text { min-width: 0; }
   .p-name { font-weight: 800; font-size: .95rem; }
-  .p-act { color: var(--muted); font-size: .84rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .p-act b { color: var(--text); font-weight: 700; }
-  .p-sub { color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .p-sub { color: var(--muted); font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .p-sub[hidden] { display: none; }
+  .acts { display: grid; gap: 8px; }
+  .act-none { color: var(--muted); font-size: .84rem; }
+  .act {
+    display: flex; gap: 12px; align-items: center; padding: 10px;
+    border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid var(--line);
+  }
+  .act-art { position: relative; width: 66px; height: 66px; flex: none; }
+  .act-art > img:first-child { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; display: block; background: rgba(255,255,255,.08); }
+  .act-small {
+    position: absolute; right: -5px; bottom: -5px; width: 24px; height: 24px;
+    border-radius: 50%; object-fit: cover; border: 2px solid #15151d; background: #15151d;
+  }
+  .act-body { min-width: 0; flex: 1; }
+  .act-label { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .act-title { font-weight: 800; font-size: .92rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .act-line { color: #c9c9d4; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .act-time { color: var(--accent); font-size: .78rem; font-weight: 700; margin-top: 3px; }
+  .act-bar { height: 4px; border-radius: 4px; background: rgba(255,255,255,.14); margin-top: 6px; overflow: hidden; }
+  .act-fill { height: 100%; width: 0; background: var(--accent); }
 
   @media (max-width: 380px) {
     .card { padding: 26px 16px 18px; }
@@ -449,20 +468,30 @@ CONFIG.links.forEach(l => {
   $("links").appendChild(el);
 });
 
-/* --- Carte de présence (statique, ou en direct via Lanyard) --- */
+/* --- Carte de présence : statique, ou en direct via Lanyard (comme sur Discord) --- */
 const presence = (function () {
-  const d = CONFIG.discord, p = $("presence");
+  const d = CONFIG.discord, root = $("presence");
+  const head = document.createElement("div"); head.className = "p-head";
   const av = document.createElement("div"); av.className = "p-avatar";
   const img = document.createElement("div"); img.className = "img";
   const dot = document.createElement("span"); dot.className = "dot online";
   av.append(img, dot);
   const tx = document.createElement("div"); tx.className = "p-text";
   const nm = document.createElement("div"); nm.className = "p-name"; nm.textContent = d.name;
-  const ac = document.createElement("div"); ac.className = "p-act";
-  const sub = document.createElement("div"); sub.className = "p-sub";
-  tx.append(nm, ac, sub);
-  p.append(av, tx);
+  const st = document.createElement("div"); st.className = "p-sub"; st.hidden = true;
+  tx.append(nm, st);
+  head.append(av, tx);
+  const list = document.createElement("div"); list.className = "acts";
+  root.append(head, list);
 
+  let timers = [];
+  setInterval(() => timers.forEach(f => f()), 1000);
+  const two = n => String(n).padStart(2, "0");
+  function fmt(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return h ? h + ":" + two(m) + ":" + two(s) : m + ":" + two(s);
+  }
   function setAvatar(url) {
     img.textContent = "";
     if (!url) { img.textContent = letter; return; }
@@ -470,16 +499,58 @@ const presence = (function () {
     i.onerror = () => { i.remove(); img.textContent = letter; };
     img.appendChild(i);
   }
+  function card(a) {
+    const c = document.createElement("div"); c.className = "act";
+    if (a.img) {
+      const art = document.createElement("div"); art.className = "act-art";
+      const im = new Image(); im.alt = a.imgText || ""; im.src = a.img; im.onerror = () => art.remove();
+      art.appendChild(im);
+      if (a.small) {
+        const sm = new Image(); sm.alt = ""; sm.className = "act-small"; sm.src = a.small;
+        sm.onerror = () => sm.remove(); art.appendChild(sm);
+      }
+      c.appendChild(art);
+    }
+    const body = document.createElement("div"); body.className = "act-body";
+    const lab = document.createElement("div"); lab.className = "act-label";
+    lab.textContent = ((a.label ? a.label + " " : "") + a.name).trim();
+    body.appendChild(lab);
+    [a.details, a.state].filter(Boolean).forEach((t, i) => {
+      const l = document.createElement("div"); l.className = i === 0 ? "act-title" : "act-line";
+      l.textContent = t; body.appendChild(l);
+    });
+    if (a.start) {
+      const t = document.createElement("div"); t.className = "act-time";
+      let fill = null;
+      if (a.end) {
+        const bar = document.createElement("div"); bar.className = "act-bar";
+        fill = document.createElement("div"); fill.className = "act-fill"; bar.appendChild(fill);
+        body.append(bar);
+      }
+      body.appendChild(t);
+      const tick = () => {
+        const now = Date.now();
+        if (a.end) {
+          const tot = (a.end - a.start) / 1000, cur = Math.min(tot, (now - a.start) / 1000);
+          fill.style.width = (tot ? cur / tot * 100 : 0) + "%";
+          t.textContent = fmt(cur) + " / " + fmt(tot);
+        } else t.textContent = fmt((now - a.start) / 1000) + " écoulé";
+      };
+      tick(); timers.push(tick);
+    }
+    c.appendChild(body);
+    return c;
+  }
   function render(s) {
     dot.className = "dot " + (s.status || "offline");
     dot.title = s.status || "";
-    ac.textContent = ""; sub.textContent = "";
-    if (s.activity) {
-      if (s.label) ac.append(s.label + " ");
-      const b = document.createElement("b"); b.textContent = s.activity; ac.appendChild(b);
-      sub.textContent = s.sub || "";
-    } else ac.textContent = "Aucune activité";
-    sub.hidden = !sub.textContent;
+    st.textContent = s.text || ""; st.hidden = !s.text;
+    list.textContent = ""; timers = [];
+    if (!s.activities || !s.activities.length) {
+      const n = document.createElement("div"); n.className = "act-none"; n.textContent = "Aucune activité";
+      list.appendChild(n); return;
+    }
+    s.activities.slice(0, 3).forEach(a => list.appendChild(card(a)));
   }
   return { setAvatar, render };
 })();
@@ -487,21 +558,43 @@ const presence = (function () {
 (function livePresence() {
   const d = CONFIG.discord;
   presence.setAvatar(d.avatar);
-  const staticState = { status: d.status, label: d.activityLabel, activity: d.activity, sub: "" };
+  const staticState = {
+    status: d.status, text: "",
+    activities: d.activity ? [{ label: d.activityLabel, name: d.activity }] : []
+  };
   presence.render(staticState);
   if (!d.lanyardId) return;
 
   const LABELS = { 0: "Joue à", 1: "Diffuse", 2: "Écoute", 3: "Regarde", 5: "Participe à" };
+  // Convertit les images d'activité Discord (Rich Presence) en adresses utilisables
+  function imgUrl(a, key) {
+    const v = a.assets && a.assets[key];
+    if (!v) return "";
+    if (v.indexOf("mp:external/") === 0) return "https://media.discordapp.net/external/" + v.slice(12);
+    if (v.indexOf("mp:") === 0) return "https://media.discordapp.net/" + v.slice(3);
+    if (v.indexOf("spotify:") === 0) return "https://i.scdn.co/image/" + v.slice(8);
+    if (v.indexOf("youtube:") === 0) return "https://i.ytimg.com/vi/" + v.slice(8) + "/hqdefault.jpg";
+    if (a.application_id) return "https://cdn.discordapp.com/app-assets/" + a.application_id + "/" + v + ".png";
+    return "";
+  }
   function fromLanyard(data) {
     if (!data) return staticState;
-    const act = (data.activities || []).find(a => a.type !== 4);   // 4 = statut personnalisé
     const u = data.discord_user;
     if (u && u.avatar) presence.setAvatar("https://cdn.discordapp.com/avatars/" + u.id + "/" + u.avatar + ".png?size=128");
+    const acts = data.activities || [];
+    const custom = acts.find(a => a.type === 4);            // statut personnalisé
+    const text = custom ? (((custom.emoji && !custom.emoji.id ? custom.emoji.name + " " : "") + (custom.state || "")).trim()) : "";
     return {
       status: data.discord_status || "offline",
-      label: act ? (LABELS[act.type] || "") : "",
-      activity: act ? act.name : "",
-      sub: act ? [act.details, act.state].filter(Boolean).join(" · ") : ""
+      text: text,
+      activities: acts.filter(a => a.type !== 4).map(a => ({
+        label: LABELS[a.type] || "", name: a.name || "",
+        details: a.details, state: a.state,
+        img: imgUrl(a, "large_image") || (a.name === "Spotify" && data.spotify ? data.spotify.album_art_url : ""),
+        imgText: a.assets && a.assets.large_text,
+        small: imgUrl(a, "small_image"),
+        start: a.timestamps && a.timestamps.start, end: a.timestamps && a.timestamps.end
+      }))
     };
   }
   async function poll() {
@@ -509,7 +602,7 @@ const presence = (function () {
       const r = await fetch("https://api.lanyard.rest/v1/users/" + d.lanyardId);
       const j = await r.json();
       if (j && j.success) presence.render(fromLanyard(j.data));
-    } catch (e) { /* hors ligne ou bloqué : on garde l'affichage actuel */ }
+    } catch (e) { /* hors ligne : on garde l'affichage actuel */ }
   }
   poll();
   try {
